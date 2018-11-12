@@ -17,9 +17,9 @@ class ConfigExtension
 
     private final Property<String> destinationFolderIdProperty
 
-    private final Property<String> destinationNameProperty
+    private final Property<List<String>> destinationNamesProperty
 
-    private final Property<File> fileProperty
+    private final Property<List<File>> filesProperty
 
     private final Property<String> clientIdProperty
 
@@ -31,13 +31,15 @@ class ConfigExtension
 
     private final Property<File> credentialsDirProperty
 
+    private final Property<File> serviceAccountJsonProperty
+
     ConfigExtension(
         Project project)
     {
         destinationFolderPathProperty = project.objects.property(String)
         destinationFolderIdProperty = project.objects.property(String)
-        destinationNameProperty = project.objects.property(String)
-        fileProperty = project.objects.property(File)
+        destinationNamesProperty = project.objects.property(List)
+        filesProperty = project.objects.property(List)
         clientIdProperty = project.objects.property(String)
         clientSecretProperty = project.objects.property(String)
         permissionProperty = project.objects.property(List)
@@ -48,6 +50,8 @@ class ConfigExtension
         updateIfExistsProperty.set(null as Boolean)
 
         credentialsDirProperty = project.objects.property(File)
+
+        serviceAccountJsonProperty = project.objects.property(File)
     }
 
     String getDestinationFolderPath()
@@ -82,36 +86,36 @@ class ConfigExtension
         destinationFolderIdProperty
     }
 
-    String getDestinationName()
+    List<String> getDestinationNames()
     {
-        destinationNameProperty.get()
+        destinationNamesProperty.get()
     }
 
-    void setDestinationName(
-        String value)
+    void setDestinationNames(
+        List<String> value)
     {
-        destinationNameProperty.set(value)
+        destinationNamesProperty.set(value)
     }
 
-    Provider<String> getDestinationNameProvider()
+    Provider<List<String>> getDestinationNamesProvider()
     {
-        destinationNameProperty
+        destinationNamesProperty
     }
 
-    File getFile()
+    List<File> getFiles()
     {
-        fileProperty.get()
+        filesProperty.get()
     }
 
-    void setFile(
-        File value)
+    void setFiles(
+        List<File> value)
     {
-        fileProperty.set(value)
+        filesProperty.set(value)
     }
 
-    Provider<File> getFileProvider()
+    Provider<List<File>> getFilesProvider()
     {
-        fileProperty
+        filesProperty
     }
 
     String getClientId()
@@ -201,5 +205,21 @@ class ConfigExtension
     Provider<File> getCredentialsDirProvider()
     {
         credentialsDirProperty
+    }
+
+    File getServiceAccountJson()
+    {
+        serviceAccountJsonProperty.get()
+    }
+
+    void setServiceAccountJson(
+            File value)
+    {
+        serviceAccountJsonProperty.set(value)
+    }
+
+    Provider<File> getServiceAccountJsonProvider()
+    {
+        serviceAccountJsonProperty
     }
 }

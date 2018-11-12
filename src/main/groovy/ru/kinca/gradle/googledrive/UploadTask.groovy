@@ -12,7 +12,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
@@ -35,9 +35,9 @@ extends DefaultTask
 
     private final Property<String> destinationFolderIdProperty
 
-    private final Property<String> destinationNameProperty
+    private final Property<List<String>> destinationNamesProperty
 
-    private final Property<File> fileProperty
+    private final Property<List<File>> filesProperty
 
     private final Property<String> clientIdProperty
 
@@ -49,12 +49,14 @@ extends DefaultTask
 
     private final Property<File> credentialsDirProperty
 
+    private final Property<File> serviceAccountJsonProperty
+
     UploadTask()
     {
         destinationFolderPathProperty = project.objects.property(String)
         destinationFolderIdProperty = project.objects.property(String)
-        destinationNameProperty = project.objects.property(String)
-        fileProperty = project.objects.property(File)
+        destinationNamesProperty = project.objects.property(List)
+        filesProperty = project.objects.property(List)
         clientIdProperty = project.objects.property(String)
         clientSecretProperty = project.objects.property(String)
         permissionsProperty = project.objects.property(List)
@@ -65,6 +67,8 @@ extends DefaultTask
         updateIfExistsProperty.set(null as Boolean)
 
         credentialsDirProperty = project.objects.property(File)
+
+        serviceAccountJsonProperty = project.objects.property(File)
     }
 
     @TaskAction
@@ -73,68 +77,78 @@ extends DefaultTask
         GoogleClient googleClient = new GoogleClient(
             clientId,
             clientSecret,
-            new FileDataStoreFactory(credentialsDir))
+            new FileDataStoreFactory(credentialsDir),
+            serviceAccountJson
+        )
 
         String destinationFolderId = determineDestination(googleClient)
 
-        DriveFile driveFile = new DriveFile()
-        driveFile.setName(destinationName)
-        driveFile.setParents([destinationFolderId])
+        files.eachWithIndex { file, idx ->
+            if (!file.exists()) {
+                return
+            }
 
-        FileContent content = new FileContent('application/octet-stream', file)
-        DriveRequest<DriveFile> modificationRequest
+            String destinationName = (files.size() == destinationNames.size()) ? destinationNames.get(idx) : file.name
+            DriveFile driveFile = new DriveFile()
+            driveFile.setName(destinationName)
+            driveFile.setParents([destinationFolderId])
 
-        List<DriveFile> existingDestinationFiles = DriveUtils.findInFolder(
-            googleClient.drive, destinationFolderId, destinationName)
-        if (existingDestinationFiles)
-        {
-            if (updateIfExists)
+            FileContent content = new FileContent('application/octet-stream', file)
+            DriveRequest<DriveFile> modificationRequest
+
+            List<DriveFile> existingDestinationFiles = DriveUtils.findInFolder(
+                googleClient.drive, destinationFolderId, destinationName)
+            if (existingDestinationFiles)
             {
-                // Update the most recent, if the are many with the same name
-                DriveFile updatedFile = existingDestinationFiles
-                    .toSorted { it.getModifiedTime() }.first()
+                if (updateIfExists)
+                {
+                    // Update the most recent, if the are many with the same name
+                    DriveFile updatedFile = existingDestinationFiles
+                        .toSorted { it.getModifiedTime() }.first()
 
-                logger.info("File with name '${destinationName}' already" +
-                    " exists, id: ${updatedFile.getId()}. Updating...")
-                modificationRequest = googleClient.drive.files().update(
-                    updatedFile.getId(), null, content)
+                    logger.info("File with name '${destinationName}' already" +
+                        " exists, id: ${updatedFile.getId()}. Updating...")
+                    modificationRequest = googleClient.drive.files().update(
+                        updatedFile.getId(), null, content)
+                }
+                else
+                {
+                    throw new GradleException('Remote file(s) already exists,' +
+                        " id: ${existingDestinationFiles*.getId()}")
+                }
             }
             else
             {
-                throw new GradleException('Remote file(s) already exists,' +
-                    " id: ${existingDestinationFiles*.getId()}")
+                logger.info('Creating file...')
+                modificationRequest = googleClient.drive.files()
+                    .create(driveFile, content)
             }
-        }
-        else
-        {
-            logger.info('Creating file...')
-            modificationRequest = googleClient.drive.files()
-                .create(driveFile, content)
-        }
 
-        modificationRequest.getMediaHttpUploader().with {
-            progressListener = {
-                logger.info('Uploaded: {} {}[bytes]({})',
-                    it.uploadState,
-                    String.format('%,3d', it.numBytesUploaded),
-                    String.format('%2.1f%%', it.progress * 100))
+            modificationRequest.getMediaHttpUploader().with {
+                progressListener = {
+                    logger.info('Uploaded: {} {}[bytes]({})',
+                        it.uploadState,
+                        String.format('%,3d', it.numBytesUploaded),
+                        String.format('%2.1f%%', it.progress * 100))
+                }
             }
+
+            DriveFile updated = modificationRequest.execute()
+
+            logger.debug('Creating permissions...')
+            BatchRequest permissionsBatchRequest = googleClient.drive.batch()
+            permissions.each {
+                googleClient.drive.permissions().create(updated.getId(), it)
+                    .queue(permissionsBatchRequest, new SimpleJsonBatchCallBack(
+                    'Could not update permissions'))
+            }
+            permissionsBatchRequest.execute()
+
+            logger.info("File '${file.canonicalPath}' is uploaded to" +
+                " '$destinationFolderPath' and named '$destinationName'.")
+            logger.quiet("Google Drive short link: ${getLink(updated)}")
+
         }
-
-        DriveFile updated = modificationRequest.execute()
-
-        logger.debug('Creating permissions...')
-        BatchRequest permissionsBatchRequest = googleClient.drive.batch()
-        permissions.each {
-            googleClient.drive.permissions().create(updated.getId(), it)
-                .queue(permissionsBatchRequest, new SimpleJsonBatchCallBack(
-                'Could not update permissions'))
-        }
-        permissionsBatchRequest.execute()
-
-        logger.info("File '${file.canonicalPath}' is uploaded to" +
-            " '$destinationFolderPath' and named '$destinationName'.")
-        logger.quiet("Google Drive short link: ${getLink(updated)}")
     }
 
     private String determineDestination(
@@ -152,8 +166,11 @@ extends DefaultTask
                 GoogleDriveUploaderPlugin.toPathElements(destinationFolderPath))
         }
 
-        throw new GradleException('You must specify either' +
-            ' destinationFolderId or destinationFolderPath')
+        return DriveUtils.makeDirs(
+                googleClient.drive,
+                destinationFolderId,
+                GoogleDriveUploaderPlugin.toPathElements(destinationFolderPath)
+        )
     }
 
     private static String getLink(
@@ -201,44 +218,44 @@ extends DefaultTask
     }
 
     @Input
-    String getDestinationName()
+    List<String> getDestinationNames()
     {
-        destinationNameProperty.getOrElse(file.name)
+        destinationNamesProperty.getOrElse(new ArrayList<String>())
     }
 
-    void setDestinationName(
-        String value)
+    void setDestinationNames(
+        List<String> value)
     {
-        destinationNameProperty.set(value)
+        destinationNamesProperty.set(value)
     }
 
-    void setDestinationNameProvider(
-        Provider<String> value)
+    void setDestinationNamesProvider(
+        Provider<List<String>> value)
     {
-        destinationNameProperty.set(value)
+        destinationNamesProperty.set(value)
     }
 
-    @InputFile
-    File getFile()
+    @InputFiles
+    List<File> getFiles()
     {
-        fileProperty.get()
+        filesProperty.get()
     }
 
-    void setFile(
-        File value)
+    void setFiles(
+        List<File> value)
     {
-        fileProperty.set(value)
+        filesProperty.set(value)
     }
 
-    void setFileProvider(
-        Provider<File> value)
+    void setFilesProvider(
+        Provider<List<File>> value)
     {
-        fileProperty.set(value)
+        filesProperty.set(value)
     }
 
     String getClientId()
     {
-        clientIdProperty.get()
+        clientIdProperty.getOrElse("")
     }
 
     void setClientId(
@@ -255,7 +272,7 @@ extends DefaultTask
 
     String getClientSecret()
     {
-        clientSecretProperty.get()
+        clientSecretProperty.getOrElse("")
     }
 
     void setClientSecret(
@@ -324,5 +341,23 @@ extends DefaultTask
         Provider<File> value)
     {
         credentialsDirProperty.set(value)
+    }
+
+    @Internal
+    File getServiceAccountJson()
+    {
+        serviceAccountJsonProperty.getOrNull()
+    }
+
+    void setServiceAccountJson(
+            File value)
+    {
+        serviceAccountJsonProperty.set(value)
+    }
+
+    void setServiceAccountJsonProvider(
+            Provider<File> value)
+    {
+        serviceAccountJsonProperty.set(value)
     }
 }

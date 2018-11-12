@@ -20,20 +20,19 @@ implements Plugin<Project>
     void apply(
         Project project)
     {
-        ConfigExtension config = project.extensions
-            .create(EXTENSION_NAME, ConfigExtension, project)
+        ConfigExtension config = project.extensions.create(EXTENSION_NAME, ConfigExtension, project)
 
         project.tasks.create(DEFAULT_TASK_NAME, UploadTask) { UploadTask it ->
             it.clientIdProvider = config.clientIdProvider
             it.clientSecretProvider = config.clientSecretProvider
-            it.destinationFolderPathProvider = config
-                .destinationFolderPathProvider
+            it.destinationFolderPathProvider = config.destinationFolderPathProvider
             it.destinationFolderIdProvider = config.destinationFolderIdProvider
-            it.destinationNameProvider = config.destinationNameProvider
-            it.fileProvider = config.fileProvider
+            it.destinationNamesProvider = config.destinationNamesProvider
+            it.filesProvider = config.filesProvider
             it.permissionsProvider = config.permissionsProvider
             it.updateIfExistsProvider = config.updateIfExistsProvider
             it.credentialsDirProvider = config.credentialsDirProvider
+            it.serviceAccountJsonProvider = config.serviceAccountJsonProvider
         }
     }
 

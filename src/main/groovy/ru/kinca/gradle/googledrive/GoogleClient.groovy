@@ -11,6 +11,7 @@ import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.client.util.store.DataStoreFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 
 import groovy.util.logging.Slf4j
 
@@ -38,6 +39,7 @@ class GoogleClient
     private final String clientId
     private final String clientSecret
     private final DataStoreFactory dataStoreFactory
+    private final File serviceAccountJson
 
     private HttpTransport httpTransport
     private Credential credential
@@ -47,11 +49,13 @@ class GoogleClient
     GoogleClient(
         String clientId,
         String clientSecret,
-        DataStoreFactory dataStoreFactory)
+        DataStoreFactory dataStoreFactory,
+        File serviceAccountJson)
     {
         this.clientSecret = clientSecret
         this.clientId = clientId
         this.dataStoreFactory = dataStoreFactory
+        this.serviceAccountJson = serviceAccountJson
     }
 
     private void init()
@@ -73,19 +77,26 @@ class GoogleClient
     private void authorize()
     throws IOException
     {
-        // Build flow and trigger user authorization request.
-        GoogleAuthorizationCodeFlow flow =
-            new GoogleAuthorizationCodeFlow.Builder(
-                httpTransport,
-                JSON_FACTORY,
-                clientId, clientSecret,
-                SCOPES)
-                .setDataStoreFactory(dataStoreFactory)
-                .setAccessType('offline')
-                .build()
+        if (serviceAccountJson.exists()) {
+            credential = GoogleCredential.fromStream(new FileInputStream(serviceAccountJson))
+                    .createScoped(Collections.singleton(DriveScopes.DRIVE))
+        } else if (!clientId.isEmpty() && clientSecret.isEmpty()) {
+            // Build flow and trigger user authorization request.
+            GoogleAuthorizationCodeFlow flow =
+                new GoogleAuthorizationCodeFlow.Builder(
+                    httpTransport,
+                    JSON_FACTORY,
+                    clientId, clientSecret,
+                    SCOPES)
+                    .setDataStoreFactory(dataStoreFactory)
+                    .setAccessType('offline')
+                    .build()
 
-        credential = new AuthorizationCodeInstalledApp(
-            flow, new LocalServerReceiver()).authorize('drive-user')
+            credential = new AuthorizationCodeInstalledApp(
+                flow, new LocalServerReceiver()).authorize('drive-user')
+        } else {
+            throw new IllegalStateException("Must set 'serviceAccountJson' or 'clientId' and 'clientSecret'")
+        }
     }
 
     /**
