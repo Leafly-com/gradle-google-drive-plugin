@@ -14,7 +14,7 @@ final class DriveUtils
     public static final String FOLDER_MIME_TYPE =
         'application/vnd.google-apps.folder'
     private static final String DEFAULT_SPACES = 'drive'
-    private static final String DEFAULT_CORPORA = 'user'
+    private static final String DEFAULT_CORPORA = 'teamDrive'
 
     private DriveUtils()
     {
@@ -40,6 +40,9 @@ final class DriveUtils
             List<File> existingFolders = drive.files().list()
                 .setSpaces(DEFAULT_SPACES)
                 .setCorpora(DEFAULT_CORPORA)
+                .setIncludeTeamDriveItems(true)
+                .setSupportsTeamDrives(true)
+                .setTeamDriveId("0AFdi6bicClgeUk9PVA")
                 .setQ("name = '$currName'" +
                     " and '$currentParent' in parents" +
                     " and not trashed" +
@@ -59,7 +62,9 @@ final class DriveUtils
                     .setMimeType(FOLDER_MIME_TYPE)
                     .setParents([currentParent])
 
-                folder = drive.files().create(toCreate).execute()
+                folder = drive.files().create(toCreate)
+                        .setSupportsTeamDrives(true)
+                        .execute()
             }
 
             folder.getId()
@@ -88,6 +93,9 @@ final class DriveUtils
         drive.files().list()
             .setSpaces(DEFAULT_SPACES)
             .setCorpora(DEFAULT_CORPORA)
+            .setIncludeTeamDriveItems(true)
+            .setSupportsTeamDrives(true)
+            .setTeamDriveId("0AFdi6bicClgeUk9PVA")
             .setFields('files(id, name)')
             .setQ(query)
             .execute()

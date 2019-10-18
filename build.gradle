@@ -7,7 +7,7 @@ plugins {
 }
 
 version = '1.1.0'
-group = 'ru.kinca.gradle'
+group = 'ru.kinca.gradle2'
 
 repositories {
 	mavenCentral()
@@ -19,7 +19,7 @@ codenarcMain {
     configFile = file('config/codenarc/main.groovy')
 }
 
-String pluginId = 'ru.kinca.google-drive-uploader'
+String pluginId = 'ru.kinca.google-drive-uploader2'
 gradlePlugin {
     plugins {
         googleDriveUploader {

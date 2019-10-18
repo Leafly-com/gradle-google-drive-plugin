@@ -92,6 +92,7 @@ extends DefaultTask
             DriveFile driveFile = new DriveFile()
             driveFile.setName(destinationName)
             driveFile.setParents([destinationFolderId])
+            driveFile.setTeamDriveId("0AFdi6bicClgeUk9PVA")
 
             FileContent content = new FileContent('application/octet-stream', file)
             DriveRequest<DriveFile> modificationRequest
@@ -109,7 +110,7 @@ extends DefaultTask
                     logger.info("File with name '${destinationName}' already" +
                         " exists, id: ${updatedFile.getId()}. Updating...")
                     modificationRequest = googleClient.drive.files().update(
-                        updatedFile.getId(), null, content)
+                        updatedFile.getId(), null, content).setSupportsTeamDrives(true)
                 }
                 else
                 {
@@ -122,6 +123,7 @@ extends DefaultTask
                 logger.info('Creating file...')
                 modificationRequest = googleClient.drive.files()
                     .create(driveFile, content)
+                    .setSupportsTeamDrives(true)
             }
 
             modificationRequest.getMediaHttpUploader().with {
@@ -135,14 +137,14 @@ extends DefaultTask
 
             DriveFile updated = modificationRequest.execute()
 
-            logger.debug('Creating permissions...')
-            BatchRequest permissionsBatchRequest = googleClient.drive.batch()
-            permissions.each {
-                googleClient.drive.permissions().create(updated.getId(), it)
-                    .queue(permissionsBatchRequest, new SimpleJsonBatchCallBack(
-                    'Could not update permissions'))
-            }
-            permissionsBatchRequest.execute()
+//            logger.debug('Creating permissions...')
+//            BatchRequest permissionsBatchRequest = googleClient.drive.batch()
+//            permissions.each {
+//                googleClient.drive.permissions().create(updated.getId(), it)
+//                    .queue(permissionsBatchRequest, new SimpleJsonBatchCallBack(
+//                    'Could not update permissions'))
+//            }
+//            permissionsBatchRequest.execute()
 
             logger.info("File '${file.canonicalPath}' is uploaded to" +
                 " '$destinationFolderPath' and named '$destinationName'.")
